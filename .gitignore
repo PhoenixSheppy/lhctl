@@ -1,0 +1,5 @@
+build/
+flatpak-build/
+.flatpak-builder/
+*.flatpak
+preview*.png

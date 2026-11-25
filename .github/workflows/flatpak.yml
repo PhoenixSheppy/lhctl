@@ -1,0 +1,23 @@
+name: flatpak
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Native arm64 runner: the Steam Frame is aarch64.
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: lhctl.flatpak
+          manifest-path: packaging/com.phoenixnet_labs.LighthouseCtl.yml
+          arch: aarch64
+          cache-key: flatpak-builder-${{ github.sha }}
