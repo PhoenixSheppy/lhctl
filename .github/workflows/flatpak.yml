@@ -1,9 +1,26 @@
 name: flatpak
+# Only build when something that ends up in the Flatpak changes. Docs, README, get.sh,
+# install scripts etc. don't trigger a build. Tag pushes (v*) always build (GitHub ignores
+# path filters for tags), and you can force one from the Actions tab with "Run workflow".
 on:
   push:
     branches: [main]
     tags: ['v*']
+    paths:
+      - 'src/**'
+      - 'third_party/**'
+      - 'resources/**'
+      - 'CMakeLists.txt'
+      - 'packaging/com.phoenixnet_labs.LighthouseCtl.yml'
+      - '.github/workflows/flatpak.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'third_party/**'
+      - 'resources/**'
+      - 'CMakeLists.txt'
+      - 'packaging/com.phoenixnet_labs.LighthouseCtl.yml'
+      - '.github/workflows/flatpak.yml'
   workflow_dispatch:
 
 jobs:
