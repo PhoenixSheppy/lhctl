@@ -14,10 +14,58 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: lhctl.flatpak
           manifest-path: packaging/com.phoenixnet_labs.LighthouseCtl.yml
           arch: aarch64
           cache-key: flatpak-builder-${{ github.sha }}
+
+  # Every push to main becomes a numbered release (v<version>-build.<N>);
+  # pushing a tag like v0.2.0 makes a release with that name instead.
+  release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: lhctl-aarch64.flatpak
+          path: dist
+
+      - name: Pick release name
+        id: tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            ver=$(grep -oP 'project\(lhctl VERSION \K[0-9.]+' CMakeLists.txt)
+            echo "tag=v${ver}-build.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+          ls -la dist
+          (cd dist && sha256sum lhctl.flatpak > lhctl.flatpak.sha256)
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: lhctl ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ steps.tag.outputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            dist/lhctl.flatpak
+            dist/lhctl.flatpak.sha256
+          body: |
+            Steam Frame (aarch64) Flatpak bundle.
+
+            Install on the Frame (Desktop Mode → Konsole), from the repo folder:
+            ```
+            ./packaging/install.sh ~/Downloads/lhctl.flatpak
+            ```
