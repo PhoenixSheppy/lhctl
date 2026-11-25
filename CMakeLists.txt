@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(lhctl VERSION 0.1.3 LANGUAGES CXX)
+project(lhctl VERSION 0.1.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,6 +10,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 find_package(Threads REQUIRED)
+find_package(Vulkan REQUIRED)
 
 # The SDK ships a prebuilt libopenvr_api.so. The arm64 one (for the Steam Frame) is vendored;
 # point OPENVR_LIB_DIR somewhere else to build on another architecture.
@@ -29,11 +30,12 @@ add_executable(lhctl
   src/model.cpp
   src/canvas.cpp
   src/ui.cpp
-  src/overlay.cpp)
+  src/overlay.cpp
+  src/vk_upload.cpp)
 target_include_directories(lhctl SYSTEM PRIVATE third_party/openvr third_party/stb)
 target_compile_definitions(lhctl PRIVATE LHCTL_VERSION="${PROJECT_VERSION}")
-target_compile_options(lhctl PRIVATE -Wall -Wextra -Wno-unused-parameter)
-target_link_libraries(lhctl PRIVATE PkgConfig::GIO Threads::Threads ${OPENVR_LIB_DIR}/libopenvr_api.so)
+target_compile_options(lhctl PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
+target_link_libraries(lhctl PRIVATE PkgConfig::GIO Threads::Threads Vulkan::Vulkan ${OPENVR_LIB_DIR}/libopenvr_api.so)
 # libopenvr_api.so is installed next to the binary's lib folder.
 set_target_properties(lhctl PROPERTIES
   BUILD_RPATH "${OPENVR_LIB_DIR}"

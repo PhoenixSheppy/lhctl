@@ -1,4 +1,5 @@
 #include "overlay.h"
+#include "vk_upload.h"
 
 #include <glib.h>
 #include <openvr.h>
@@ -30,6 +31,46 @@ void to_canvas(const vr::VREvent_Mouse_t &m, float *x, float *y) {
     }
     *x = mx;
     *y = Ui::H - my;
+}
+
+std::vector<std::string> split_words(const char *s) {
+    std::vector<std::string> out;
+    std::string w;
+    for (const char *p = s;; p++) {
+        if (*p == ' ' || *p == 0) {
+            if (!w.empty())
+                out.push_back(w);
+            w.clear();
+            if (!*p)
+                break;
+        } else {
+            w += *p;
+        }
+    }
+    return out;
+}
+
+// Sets up Vulkan the way SteamVR wants it (its extensions, its GPU).
+bool init_gpu(VkUpload &gpu, std::string *err) {
+    if (!vr::VRCompositor() || !vr::VRSystem()) {
+        *err = "no IVRCompositor";
+        return false;
+    }
+    VkUpload::Hooks hooks;
+    char buf[4096] = {};
+    vr::VRCompositor()->GetVulkanInstanceExtensionsRequired(buf, sizeof(buf));
+    hooks.instance_extensions = split_words(buf);
+    hooks.pick_device = [](VkInstance inst) {
+        uint64_t dev = 0;
+        vr::VRSystem()->GetOutputDevice(&dev, vr::TextureType_Vulkan, inst);
+        return reinterpret_cast<VkPhysicalDevice>(dev);
+    };
+    hooks.device_extensions = [](VkPhysicalDevice pd) {
+        char b[4096] = {};
+        vr::VRCompositor()->GetVulkanDeviceExtensionsRequired(pd, b, sizeof(b));
+        return split_words(b);
+    };
+    return gpu.init(Ui::W, Ui::H, hooks, err);
 }
 
 bool vr_connect(vr::EVRInitError *out) {
@@ -111,12 +152,49 @@ Overlay::End Overlay::session(const std::atomic<bool> &stop) {
     auto last_vis_check = t0, last_pointer = t0 - std::chrono::hours(1);
     int clicks_logged = 0;
 
-    auto draw = [&] {
-        const Snapshot s = model_.snapshot();
-        ui_.render(canvas, s, mx, my, secs(t0, Clock::now()));
+    // Prefer our own Vulkan images: SetOverlayRaw flickers on every update.
+    VkUpload gpu;   // destroyed after VR_Shutdown below, as OpenVR requires
+    bool use_gpu = !getenv("LHCTL_RAW");
+    if (use_gpu) {
+        std::string err;
+        use_gpu = init_gpu(gpu, &err);
+        fprintf(stderr, use_gpu ? "steamvr: drawing through Vulkan\n" : "steamvr: Vulkan unavailable (%s); using SetOverlayRaw\n",
+                err.c_str());
+    }
+    auto present = [&] {
+        if (use_gpu) {
+            VkUpload::Image img;
+            std::string err;
+            if (gpu.upload(canvas.pixels().data(), &img, &err)) {
+                vr::VRVulkanTextureData_t data{};
+                data.m_nImage = uint64_t(img.image);
+                data.m_pDevice = img.device;
+                data.m_pPhysicalDevice = img.physical;
+                data.m_pInstance = img.instance;
+                data.m_pQueue = img.queue;
+                data.m_nQueueFamilyIndex = img.family;
+                data.m_nWidth = img.width;
+                data.m_nHeight = img.height;
+                data.m_nFormat = uint32_t(img.format);
+                data.m_nSampleCount = 1;
+                vr::Texture_t tex{&data, vr::TextureType_Vulkan, vr::ColorSpace_Auto};
+                const auto r = ov->SetOverlayTexture(main, &tex);
+                if (r == vr::VROverlayError_None)
+                    return;
+                err = std::string("SetOverlayTexture: ") + ov->GetOverlayErrorNameFromEnum(r);
+            }
+            fprintf(stderr, "steamvr: %s; switching to SetOverlayRaw\n", err.c_str());
+            use_gpu = false;
+        }
         const auto r = ov->SetOverlayRaw(main, canvas.pixels().data(), Ui::W, Ui::H, 4);
         if (r != vr::VROverlayError_None)
             fprintf(stderr, "steamvr: SetOverlayRaw: %s\n", ov->GetOverlayErrorNameFromEnum(r));
+    };
+
+    auto draw = [&] {
+        const Snapshot s = model_.snapshot();
+        ui_.render(canvas, s, mx, my, secs(t0, Clock::now()));
+        present();
         drawn_version = s.version;
         drawn_hover = ui_.hit(mx, my);
         last_draw = Clock::now();
