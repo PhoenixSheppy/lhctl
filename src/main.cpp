@@ -167,13 +167,44 @@ int cli(const std::string &verb, const std::vector<std::string> &addrs) {
     return 0;
 }
 
-// Inside the Flatpak, XDG_CONFIG_HOME points at ~/.var/app/<id>/config, but OpenVR looks for
-// openvr/openvrpaths.vrpath (where SteamVR is) under it. Point it back at the real ~/.config; the
-// manifest grants read access to ~/.config/openvr and read/write to ~/.config/lhctl only.
+// Inside the Flatpak, XDG_CONFIG_HOME points at ~/.var/app/<id>/config. Point it back at the real
+// ~/.config so sandboxed CLI commands and the host-side service share ~/.config/lhctl/config.ini.
 void fix_flatpak_config_home() {
     const char *home = getenv("HOME");
     if (getenv("FLATPAK_ID") && home)
         setenv("XDG_CONFIG_HOME", (std::string(home) + "/.config").c_str(), 1);
+}
+
+// SteamVR refuses OpenVR clients from inside the Flatpak sandbox (vrserver internal error 124:
+// its IPC doesn't cross the sandbox's namespaces). So for anything that talks to SteamVR, the
+// sandboxed copy re-runs this same binary on the host through the Flatpak portal, the way BFR
+// runs unsandboxed. Bluetooth-only commands stay in the sandbox. Set LHCTL_NO_HOST=1 to disable.
+void run_on_host_if_sandboxed(int argc, char **argv) {
+    if (getenv("LHCTL_NO_HOST"))
+        return;
+    GKeyFile *kf = g_key_file_new();
+    const char *info = getenv("LHCTL_FLATPAK_INFO") ? getenv("LHCTL_FLATPAK_INFO") : "/.flatpak-info";   // for tests
+    if (!g_key_file_load_from_file(kf, info, G_KEY_FILE_NONE, nullptr)) {
+        g_key_file_free(kf);
+        return;   // not sandboxed
+    }
+    gchar *app_path = g_key_file_get_string(kf, "Instance", "app-path", nullptr);
+    g_key_file_free(kf);
+    if (!app_path) {
+        fprintf(stderr, "lhctl: can't find the app's host path in /.flatpak-info; staying sandboxed\n");
+        return;
+    }
+    const std::string host_bin = std::string(app_path) + "/bin/lhctl";
+    g_free(app_path);
+    std::vector<std::string> args = {"flatpak-spawn", "--host", "--watch-bus", host_bin};
+    for (int i = 1; i < argc; i++)
+        args.emplace_back(argv[i]);
+    std::vector<char *> cargs;
+    for (auto &a : args)
+        cargs.push_back(a.data());
+    cargs.push_back(nullptr);
+    execvp(cargs[0], cargs.data());
+    perror("lhctl: flatpak-spawn");   // fall through and try in the sandbox
 }
 
 }  // namespace
@@ -192,6 +223,8 @@ int main(int argc, char **argv) {
         printf("lhctl %s\n", LHCTL_VERSION);
         return 0;
     }
+    if (verb == "run" || verb == "launch" || verb == "probe")
+        run_on_host_if_sandboxed(argc, argv);   // only returns if not sandboxed (or it failed)
     if (verb == "probe")
         return lh::probe();
     if (verb == "icon" && rest.size() == 2) {   // lhctl icon SIZE FILE.png (for packaging)
@@ -216,6 +249,14 @@ int main(int argc, char **argv) {
         if (interactive)
             notify("Already running. Open the SteamVR dashboard and look for the Base Stations tab.");
         return 0;
+    }
+    // Started from the app menu there's no terminal or journal: log to a file that has the same
+    // path inside and outside the sandbox: $XDG_RUNTIME_DIR/app/<id>/lhctl.log
+    if (!isatty(STDERR_FILENO) && !getenv("JOURNAL_STREAM")) {
+        gchar *log = g_build_filename(g_get_user_runtime_dir(), "app", kAppId, "lhctl.log", nullptr);
+        if (FILE *f = freopen(log, "w", stderr))
+            setvbuf(f, nullptr, _IOLBF, 0);
+        g_free(log);
     }
     if (interactive)
         notify("Running in the background. Open the SteamVR dashboard and look for the Base Stations tab.");

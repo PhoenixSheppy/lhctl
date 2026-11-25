@@ -5,24 +5,20 @@ sdk: org.freedesktop.Sdk
 command: lhctl
 
 finish-args:
-  # Bluetooth: BlueZ over the system bus (no raw HCI access needed).
+  # SteamVR rejects OpenVR clients from inside a sandbox (vrserver internal error 124), so
+  # `lhctl run`, `launch` and `probe` re-run the app's own binary on the host through the
+  # Flatpak portal (flatpak-spawn --host). This permission is what allows that; it means the
+  # app is effectively unsandboxed, the same as BFR, which installs straight into ~/.local.
+  - --talk-name=org.freedesktop.Flatpak
+
+  # Bluetooth for the sandboxed CLI commands (scan/on/standby/sleep/blink): BlueZ over D-Bus.
   - --system-talk-name=org.bluez
-
-  # SteamVR. libopenvr_api reads ~/.config/openvr/openvrpaths.vrpath, loads SteamVR's own
-  # vrclient.so from the Steam folder, and talks to vrserver over host shared memory and sockets.
-  - --filesystem=xdg-config/openvr:ro
-  - --filesystem=~/.local/share/Steam:ro
-  - --filesystem=~/.local/share/Steam/logs   # vrclient writes its log here
-  - --filesystem=~/.steam:ro
-  - --share=network   # host network namespace (abstract unix sockets)
-  - --share=ipc       # host SysV IPC
-  - --device=all      # host /dev/shm
-
-  # "Running in the background" notification when opened from the app menu.
-  - --talk-name=org.freedesktop.Notifications
 
   # Settings and the station list live in ~/.config/lhctl/config.ini (edit nicknames there).
   - --filesystem=xdg-config/lhctl:create
+
+  # "Running in the background" notification when opened from the app menu.
+  - --talk-name=org.freedesktop.Notifications
 
 modules:
   - name: lhctl

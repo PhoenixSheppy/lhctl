@@ -1,5 +1,6 @@
 #include "overlay.h"
 
+#include <glib.h>
 #include <openvr.h>
 
 #include <chrono>
@@ -59,10 +60,16 @@ void Overlay::run(const std::atomic<bool> &stop) {
 Overlay::End Overlay::session(const std::atomic<bool> &stop) {
     auto *ov = vr::VROverlay();
     vr::VROverlayHandle_t main = vr::k_ulOverlayHandleInvalid, thumb = vr::k_ulOverlayHandleInvalid;
-    const auto e = ov->CreateDashboardOverlay(kKey, kName, &main, &thumb);
+    auto e = ov->CreateDashboardOverlay(kKey, kName, &main, &thumb);
+    if (e == vr::VROverlayError_KeyInUse) {
+        // SteamVR can keep the key from a previous connection (e.g. after a crash); take it back.
+        vr::VROverlayHandle_t old = vr::k_ulOverlayHandleInvalid;
+        if (ov->FindOverlay(kKey, &old) == vr::VROverlayError_None)
+            ov->DestroyOverlay(old);
+        e = ov->CreateDashboardOverlay(kKey, kName, &main, &thumb);
+    }
     if (e != vr::VROverlayError_None) {
-        fprintf(stderr, "steamvr: CreateDashboardOverlay failed: %s%s\n", ov->GetOverlayErrorNameFromEnum(e),
-                e == vr::VROverlayError_KeyInUse ? " (another lhctl is running?)" : "");
+        fprintf(stderr, "steamvr: CreateDashboardOverlay failed: %s\n", ov->GetOverlayErrorNameFromEnum(e));
         vr::VR_Shutdown();
         return End::Error;
     }
@@ -102,6 +109,7 @@ Overlay::End Overlay::session(const std::atomic<bool> &stop) {
         dirty = false;
     };
     draw();   // so the tab never opens blank
+    fprintf(stderr, "steamvr: \"%s\" tab ready\n", kName);
 
     End end = End::Stop;
     while (!stop) {
@@ -176,7 +184,8 @@ Overlay::End Overlay::session(const std::atomic<bool> &stop) {
 
 int probe() {
     int bad = 0;
-    printf("lhctl %s probe\n", LHCTL_VERSION);
+    printf("lhctl %s probe (%s)\n", LHCTL_VERSION,
+           g_file_test("/.flatpak-info", G_FILE_TEST_EXISTS) ? "inside the Flatpak sandbox" : "on the host");
     char path[4096] = {};
     uint32_t need = 0;
     const bool installed = vr::VR_IsRuntimeInstalled();
