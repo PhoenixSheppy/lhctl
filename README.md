@@ -13,16 +13,18 @@ from a **Base Stations** tab in the SteamVR dashboard.
 
 ## Install (on the Frame)
 
-Desktop Mode → Konsole:
+Desktop Mode → Konsole, one line (also how you update):
 
 ```bash
-git clone <this repo> lhctl && cd lhctl
-./packaging/install.sh                 # builds the Flatpak with flatpak-builder and installs it
-# or, with a bundle from GitHub Actions:
-./packaging/install.sh lhctl.flatpak
+curl -fsSL https://raw.githubusercontent.com/PhoenixSheppy/lhctl/main/packaging/get.sh | bash
 ```
 
-The installer runs `lhctl probe`, then enables `~/.config/systemd/user/lhctl.service`.
+That pulls the latest release's `lhctl.flatpak`, checks its SHA-256 and installs it.
+Add `bash -s -- --unsandboxed` instead of `bash` if needed (see Troubleshooting), or `--tag <release>` to pin one.
+
+To build from source on the Frame instead: clone the repo and run `./packaging/install.sh`.
+
+Either installer runs `lhctl probe`, then enables `~/.config/systemd/user/lhctl.service`.
 Open the SteamVR dashboard and look for **Base Stations**. Tap **Scan** once; after that, stations are remembered.
 
 Logs: `journalctl --user -u lhctl -f` · Uninstall: `./packaging/uninstall.sh [--purge]`
