@@ -51,7 +51,8 @@ public:
     uint64_t version() const { return version_.load(); }
     bool busy() const;
 
-    void scan(int seconds = 6);
+    // Discovers stations, then runs `then` on every station found (Refresh reads their state).
+    void scan(int seconds = 6, Op then = Op::Refresh);
     void run(const std::string &address, Op op);
     void run_all(Op op);
     void set_auto_on(bool on);

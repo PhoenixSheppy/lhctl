@@ -20,6 +20,18 @@ double secs(Clock::time_point a, Clock::time_point b) { return std::chrono::dura
 
 void sleep_ms(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 
+// Mouse events are in texture pixels (from SetOverlayMouseScale) with the origin at the bottom
+// left. If a runtime ignores the mouse scale and sends 0..1 instead, scale it up ourselves.
+void to_canvas(const vr::VREvent_Mouse_t &m, float *x, float *y) {
+    float mx = m.x, my = m.y;
+    if (mx >= 0 && mx <= 1.0f && my >= 0 && my <= 1.0f) {
+        mx *= Ui::W;
+        my *= Ui::H;
+    }
+    *x = mx;
+    *y = Ui::H - my;
+}
+
 bool vr_connect(vr::EVRInitError *out) {
     vr::EVRInitError err = vr::VRInitError_None;
     // Background: never starts SteamVR itself, just fails until it is running.
@@ -84,18 +96,20 @@ Overlay::End Overlay::session(const std::atomic<bool> &stop) {
         ov->SetOverlayRaw(thumb, icon.pixels().data(), Ui::Thumb, Ui::Thumb, 4);
     }
 
-    if (model_.snapshot().settings.auto_on) {
-        fprintf(stderr, "auto: waking base stations\n");
-        model_.run_all(Op::On);
-    }
+    // Find what's around as soon as SteamVR is up; wake them too if "Wake with SteamVR" is on.
+    const bool wake = model_.snapshot().settings.auto_on;
+    fprintf(stderr, "startup: scanning%s\n", wake ? " and waking base stations" : "");
+    model_.scan(6, wake ? Op::On : Op::Refresh);
 
     Canvas canvas(Ui::W, Ui::H);
     const auto t0 = Clock::now();
-    auto last_draw = t0, last_refresh = t0 - std::chrono::hours(1);
+    auto last_draw = t0, last_refresh = t0;   // the startup scan just refreshed everything
     uint64_t drawn_version = 0;
     std::string drawn_hover = "-";
     float mx = -1, my = -1;
     bool visible = ov->IsOverlayVisible(main), dirty = true;
+    auto last_vis_check = t0, last_pointer = t0 - std::chrono::hours(1);
+    int clicks_logged = 0;
 
     auto draw = [&] {
         const Snapshot s = model_.snapshot();
@@ -117,19 +131,28 @@ Overlay::End Overlay::session(const std::atomic<bool> &stop) {
         while (ov->PollNextOverlayEvent(main, &ev, sizeof(ev))) {
             switch (ev.eventType) {
             case vr::VREvent_MouseMove:
-                mx = ev.data.mouse.x;
-                my = Ui::H - ev.data.mouse.y;   // OpenVR's mouse origin is bottom-left
+                to_canvas(ev.data.mouse, &mx, &my);
+                visible = true;                 // pointer events only come while the tab is shown
+                last_pointer = Clock::now();
                 if (ui_.hit(mx, my) != drawn_hover)
                     dirty = true;
                 break;
-            case vr::VREvent_MouseButtonDown:
-                if (ev.data.mouse.button == vr::VRMouseButton_Left) {
-                    const std::string id = ui_.hit(mx, my);
-                    if (!id.empty())
-                        ui_.click(id, model_);
-                    dirty = true;
+            case vr::VREvent_MouseButtonDown: {
+                // Use the click's own position: a click can arrive without a MouseMove before it.
+                to_canvas(ev.data.mouse, &mx, &my);
+                visible = dirty = true;
+                last_pointer = Clock::now();
+                const std::string id = ui_.hit(mx, my);
+                if (clicks_logged < 50) {
+                    fprintf(stderr, "input: button %u down raw (%.3f, %.3f) -> canvas (%.0f, %.0f) -> %s\n",
+                            ev.data.mouse.button, ev.data.mouse.x, ev.data.mouse.y, mx, my,
+                            id.empty() ? "(nothing)" : id.c_str());
+                    clicks_logged++;
                 }
+                if (!id.empty() && ev.data.mouse.button != vr::VRMouseButton_Right)
+                    ui_.click(id, model_);
                 break;
+            }
             case vr::VREvent_ScrollDiscrete:
                 if (ev.data.scroll.ydelta != 0) {
                     ui_.scroll(ev.data.scroll.ydelta > 0 ? -1 : 1, int(model_.snapshot().stations.size()));
@@ -157,6 +180,15 @@ Overlay::End Overlay::session(const std::atomic<bool> &stop) {
         if (quit) {
             end = End::Quit;
             break;
+        }
+
+        // Don't rely on Shown/Hidden events alone: ask SteamVR twice a second.
+        if (secs(last_vis_check, Clock::now()) > 0.5) {
+            last_vis_check = Clock::now();
+            const bool v = ov->IsOverlayVisible(main);
+            if (v && !visible)
+                dirty = true;
+            visible = v || secs(last_pointer, Clock::now()) < 2;
         }
 
         if (visible) {

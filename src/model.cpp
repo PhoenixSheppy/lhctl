@@ -182,7 +182,7 @@ void Model::edit(const std::string &address, const std::function<void(Station &)
     bump();
 }
 
-void Model::scan(int seconds) {
+void Model::scan(int seconds, Op then) {
     {
         std::lock_guard<std::mutex> lock(m_);
         if (scanning_)
@@ -191,7 +191,7 @@ void Model::scan(int seconds) {
         status_ = "Scanning for base stations...";
         bump();
     }
-    spawn([this, seconds] { scan_job(seconds, Op::Refresh); });
+    spawn([this, seconds, then] { scan_job(seconds, then); });
 }
 
 void Model::scan_job(int seconds, Op then) {
