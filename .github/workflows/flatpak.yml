@@ -22,8 +22,8 @@ jobs:
           arch: aarch64
           cache-key: flatpak-builder-${{ github.sha }}
 
-  # Every push to main becomes a numbered release (v<version>-build.<N>);
-  # pushing a tag like v0.2.0 makes a release with that name instead.
+  # Every push to main becomes a numbered release (v<version>-build.<N>) and is marked Latest,
+  # so packaging/get.sh always picks it up. Pushing a tag like v0.2.0 releases under that name.
   release:
     needs: build
     if: github.event_name == 'push'
@@ -43,11 +43,9 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           else
             ver=$(grep -oP 'project\(lhctl VERSION \K[0-9.]+' CMakeLists.txt)
             echo "tag=v${ver}-build.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
           fi
           ls -la dist
           (cd dist && sha256sum lhctl.flatpak > lhctl.flatpak.sha256)
@@ -57,7 +55,8 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: lhctl ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          prerelease: ${{ steps.tag.outputs.prerelease }}
+          prerelease: false
+          make_latest: true
           generate_release_notes: true
           files: |
             dist/lhctl.flatpak
@@ -65,7 +64,11 @@ jobs:
           body: |
             Steam Frame (aarch64) Flatpak bundle.
 
-            Install on the Frame (Desktop Mode → Konsole), from the repo folder:
+            Install or update on the Frame (Desktop Mode → Konsole):
             ```
-            ./packaging/install.sh ~/Downloads/lhctl.flatpak
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/packaging/get.sh | bash
+            ```
+            If `probe` can't reach SteamVR from the sandbox:
+            ```
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/packaging/get.sh | bash -s -- --unsandboxed
             ```
