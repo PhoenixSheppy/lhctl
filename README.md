@@ -9,7 +9,7 @@ from a **Base Stations** tab in the SteamVR dashboard.
 - **Blink** flashes a station's LED so you can tell which one is which.
 - **Wake with SteamVR**: turns the stations on when SteamVR starts.
 - **When SteamVR quits**: does nothing, or puts the stations in standby or to sleep.
-- Runs as a small background service. It waits for SteamVR and adds the tab while SteamVR runs, the same way Babble Frame Runtime adds its tab.
+- Runs as a small background service. It waits for SteamVR and adds the tab while SteamVR runs.
 
 ## Install (on the Frame)
 
