@@ -65,9 +65,24 @@ TimeoutStopSec=40
 [Install]
 WantedBy=default.target
 EOF
-systemctl --user daemon-reload
-systemctl --user enable lhctl.service >/dev/null
-systemctl --user restart lhctl.service
+
+# Over SSH (or any shell without a login session) systemctl --user can't find the user bus.
+# Point it at the usual place; if the user manager still isn't reachable, enable the unit by
+# hand (the same symlink `systemctl enable` makes) so it starts with the next session.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+if systemctl --user show-environment >/dev/null 2>&1; then
+  systemctl --user daemon-reload
+  systemctl --user enable lhctl.service >/dev/null
+  systemctl --user restart lhctl.service
+  echo "   service running"
+else
+  mkdir -p ~/.config/systemd/user/default.target.wants
+  ln -sf ../lhctl.service ~/.config/systemd/user/default.target.wants/lhctl.service
+  echo "   couldn't reach your systemd user session (SSH, or nobody logged in on the headset)."
+  echo "   The service is enabled and starts with your next session. To start it now, open"
+  echo "   'Lighthouse Control' from the app menu on the headset."
+fi
 
 echo "==> probe (the SteamVR lines only pass while SteamVR is running)"
 if $unsandboxed; then

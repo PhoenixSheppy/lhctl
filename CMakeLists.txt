@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(lhctl VERSION 0.1.0 LANGUAGES CXX)
+project(lhctl VERSION 0.1.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,3 +43,12 @@ include(GNUInstallDirs)
 install(TARGETS lhctl RUNTIME DESTINATION bin)
 install(FILES ${OPENVR_LIB_DIR}/libopenvr_api.so DESTINATION lib)
 install(DIRECTORY resources/fonts DESTINATION share/lhctl)
+
+# Desktop integration (app menu / Discover entry, icon, AppStream metadata).
+set(LHCTL_APP_ID com.phoenixnet_labs.LighthouseCtl)
+install(FILES packaging/${LHCTL_APP_ID}.desktop DESTINATION share/applications)
+install(FILES packaging/${LHCTL_APP_ID}.metainfo.xml DESTINATION share/metainfo)
+foreach(size 128 256 512)
+  install(FILES resources/icons/${size}.png
+          DESTINATION share/icons/hicolor/${size}x${size}/apps RENAME ${LHCTL_APP_ID}.png)
+endforeach()

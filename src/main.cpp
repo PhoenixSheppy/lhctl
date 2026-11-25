@@ -1,6 +1,8 @@
 // lhctl: SteamVR Base Station 2.0 power control for the Steam Frame, as a SteamVR dashboard tab.
 //
-//   lhctl                      run in the background; adds a "Base Stations" tab while SteamVR runs
+//   lhctl [run]                run in the background; adds a "Base Stations" tab while SteamVR runs
+//   lhctl launch               what the app-menu entry runs: like `run`, but says so with a desktop
+//                              notification, and just says "already running" if the service is up
 //   lhctl probe                check SteamVR + Bluetooth access (run this first in the Flatpak)
 //   lhctl scan                 list nearby base stations
 //   lhctl on|standby|sleep|blink [ADDR...]   control all known stations, or just ADDR
@@ -12,7 +14,10 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
+#include <fcntl.h>
+#include <gio/gio.h>
 #include <glib.h>
+#include <sys/file.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -25,6 +30,46 @@
 namespace {
 
 std::atomic<bool> g_stop{false};
+
+constexpr const char *kAppId = "com.phoenixnet_labs.LighthouseCtl";
+
+// One lhctl per user, whether started by systemd, the app menu, inside or outside the sandbox.
+// $XDG_RUNTIME_DIR/app/<id> is the same folder on the host and inside the Flatpak.
+// Returns the held lock fd, -1 if another instance holds it, or -2 if no lock could be made.
+int single_instance() {
+    gchar *dir = g_build_filename(g_get_user_runtime_dir(), "app", kAppId, nullptr);
+    g_mkdir_with_parents(dir, 0700);
+    gchar *path = g_build_filename(dir, "lhctl.lock", nullptr);
+    const int fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    g_free(path);
+    g_free(dir);
+    if (fd < 0)
+        return -2;
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+// Best-effort desktop notification (shows in Desktop Mode; harmless anywhere else).
+void notify(const char *body) {
+    GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr);
+    if (!bus)
+        return;
+    GVariantBuilder actions, hints;
+    g_variant_builder_init(&actions, G_VARIANT_TYPE("as"));
+    g_variant_builder_init(&hints, G_VARIANT_TYPE("a{sv}"));
+    GVariant *r = g_dbus_connection_call_sync(
+        bus, "org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications",
+        "Notify",
+        g_variant_new("(susssasa{sv}i)", "Lighthouse Control", 0u, kAppId, "Lighthouse Control", body, &actions,
+                      &hints, 8000),
+        nullptr, G_DBUS_CALL_FLAGS_NONE, 2000, nullptr, nullptr);
+    if (r)
+        g_variant_unref(r);
+    g_object_unref(bus);
+}
 
 std::string data_dir() {
     if (const char *e = getenv("LHCTL_DATA_DIR"))
@@ -46,7 +91,7 @@ std::string data_dir() {
 }
 
 void usage() {
-    fprintf(stderr, "usage: lhctl [run | probe | scan | on|standby|sleep|blink [ADDR...] | preview FILE.png]\n");
+    fprintf(stderr, "usage: lhctl [run | launch | probe | scan | on|standby|sleep|blink [ADDR...] | preview FILE.png]\n");
 }
 
 void print(const lh::Snapshot &s) {
@@ -149,15 +194,31 @@ int main(int argc, char **argv) {
     }
     if (verb == "probe")
         return lh::probe();
+    if (verb == "icon" && rest.size() == 2) {   // lhctl icon SIZE FILE.png (for packaging)
+        const int n = atoi(rest[0].c_str());
+        lh::Canvas c(n, n);
+        lh::Ui::render_icon(c);
+        return stbi_write_png(rest[1].c_str(), n, n, 4, c.data(), n * 4) ? 0 : 1;
+    }
     if (verb == "preview")
         return preview(rest.empty() ? "preview.png" : rest[0]);
     if (verb == "scan" || verb == "status" || verb == "on" || verb == "standby" || verb == "sleep" ||
         verb == "blink")
         return cli(verb, rest);
-    if (verb != "run") {
+    if (verb != "run" && verb != "launch") {
         usage();
         return 2;
     }
+    const bool interactive = verb == "launch";
+    const int lock = single_instance();
+    if (lock == -1) {
+        fprintf(stderr, "lhctl is already running\n");
+        if (interactive)
+            notify("Already running. Open the SteamVR dashboard and look for the Base Stations tab.");
+        return 0;
+    }
+    if (interactive)
+        notify("Running in the background. Open the SteamVR dashboard and look for the Base Stations tab.");
 
     std::signal(SIGINT, [](int) { g_stop = true; });
     std::signal(SIGTERM, [](int) { g_stop = true; });
@@ -171,5 +232,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "lhctl %s: waiting for SteamVR (config %s)\n", LHCTL_VERSION, lh::default_config_path().c_str());
     lh::Overlay(model, ui).run(g_stop);
     fprintf(stderr, "lhctl: bye\n");
+    if (lock >= 0)
+        close(lock);
     return 0;
 }

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Lighthouse Control
+GenericName=Base Station Power
+Comment=Turn SteamVR Base Station 2.0s on and off from the SteamVR dashboard
+Exec=lhctl launch
+Icon=com.phoenixnet_labs.LighthouseCtl
+Terminal=false
+StartupNotify=false
+Categories=Utility;
+Keywords=SteamVR;Lighthouse;Base Station;VR;Bluetooth;Steam Frame;

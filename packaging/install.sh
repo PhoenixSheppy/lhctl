@@ -51,9 +51,18 @@ if $unsandboxed; then
   "$bin" probe || true
   sed -i "s|^ExecStart=.*|ExecStart=$bin run|" ~/.config/systemd/user/lhctl.service
 fi
-systemctl --user daemon-reload
-systemctl --user enable --now lhctl.service
-systemctl --user restart lhctl.service
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+if systemctl --user show-environment >/dev/null 2>&1; then
+  systemctl --user daemon-reload
+  systemctl --user enable lhctl.service >/dev/null
+  systemctl --user restart lhctl.service
+else
+  mkdir -p ~/.config/systemd/user/default.target.wants
+  ln -sf ../lhctl.service ~/.config/systemd/user/default.target.wants/lhctl.service
+  echo "   couldn't reach your systemd user session; the service starts with your next session"
+  echo "   (or open 'Lighthouse Control' from the app menu to start it now)"
+fi
 
 echo
 echo "Done. Open the SteamVR dashboard and look for the 'Base Stations' tab."

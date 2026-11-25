@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.phoenixnet_labs.LighthouseCtl</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Lighthouse Control</name>
+  <summary>Power SteamVR Base Station 2.0s from the SteamVR dashboard</summary>
+  <description>
+    <p>
+      Adds a Base Stations tab to the SteamVR dashboard on the Steam Frame. It lists nearby
+      Base Station 2.0s over Bluetooth LE and turns them on, to standby or to sleep, one at a
+      time or all at once. It can also wake them when SteamVR starts and put them away when it quits.
+    </p>
+    <p>
+      It runs in the background; opening it from the app menu just makes sure it is running.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.phoenixnet_labs.LighthouseCtl.desktop</launchable>
+  <url type="homepage">https://github.com/PhoenixSheppy/lhctl</url>
+  <url type="bugtracker">https://github.com/PhoenixSheppy/lhctl/issues</url>
+  <developer id="com.phoenixnet_labs">
+    <name>PhoenixSheppy</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.1" date="2026-11-25"/>
+    <release version="0.1.0" date="2026-11-25"/>
+  </releases>
+</component>

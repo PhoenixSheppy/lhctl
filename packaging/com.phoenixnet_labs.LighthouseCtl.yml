@@ -18,6 +18,9 @@ finish-args:
   - --share=ipc       # host SysV IPC
   - --device=all      # host /dev/shm
 
+  # "Running in the background" notification when opened from the app menu.
+  - --talk-name=org.freedesktop.Notifications
+
   # Settings and the station list live in ~/.config/lhctl/config.ini (edit nicknames there).
   - --filesystem=xdg-config/lhctl:create
 

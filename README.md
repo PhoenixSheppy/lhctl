@@ -24,6 +24,11 @@ Add `bash -s -- --unsandboxed` instead of `bash` if needed (see Troubleshooting)
 
 To build from source on the Frame instead: clone the repo and run `./packaging/install.sh`.
 
+It's a background app with no window. **Lighthouse Control** in the app menu (and Discover's
+Launch button) just starts it if it isn't running and pops a notification; the UI lives in the
+SteamVR dashboard. Run the installer from Konsole on the headset; over SSH it can't reach your
+systemd user session, so the service only starts with your next session.
+
 Either installer runs `lhctl probe`, then enables `~/.config/systemd/user/lhctl.service`.
 Open the SteamVR dashboard and look for **Base Stations**. Tap **Scan** once; after that, stations are remembered.
 
