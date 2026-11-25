@@ -1,0 +1,35 @@
+app-id: com.phoenixnet_labs.LighthouseCtl
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: lhctl
+
+finish-args:
+  # Bluetooth: BlueZ over the system bus (no raw HCI access needed).
+  - --system-talk-name=org.bluez
+
+  # SteamVR. libopenvr_api reads ~/.config/openvr/openvrpaths.vrpath, loads SteamVR's own
+  # vrclient.so from the Steam folder, and talks to vrserver over host shared memory and sockets.
+  - --filesystem=xdg-config/openvr:ro
+  - --filesystem=~/.local/share/Steam:ro
+  - --filesystem=~/.local/share/Steam/logs   # vrclient writes its log here
+  - --filesystem=~/.steam:ro
+  - --share=network   # host network namespace (abstract unix sockets)
+  - --share=ipc       # host SysV IPC
+  - --device=all      # host /dev/shm
+
+  # Settings and the station list live in ~/.config/lhctl/config.ini (edit nicknames there).
+  - --filesystem=xdg-config/lhctl:create
+
+modules:
+  - name: lhctl
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - build
+          - .flatpak-builder
+          - flatpak-build

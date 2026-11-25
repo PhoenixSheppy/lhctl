@@ -1,0 +1,13 @@
+[Unit]
+Description=Lighthouse Control (SteamVR base station dashboard tab)
+
+[Service]
+# Waits quietly for SteamVR, adds the tab while it runs, survives SteamVR restarts.
+ExecStart=/usr/bin/flatpak run com.phoenixnet_labs.LighthouseCtl run
+Restart=on-failure
+RestartSec=5
+# Leave time for "When SteamVR quits" Bluetooth commands to finish.
+TimeoutStopSec=40
+
+[Install]
+WantedBy=default.target
