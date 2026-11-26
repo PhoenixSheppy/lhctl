@@ -1,0 +1,6 @@
+manifest: 0
+provides: [input, overlay]
+runs_on: headset
+install: curl -fsSL https://raw.githubusercontent.com/PhoenixSheppy/lhctl/main/packaging/get.sh | bash
+tested:
+  - { steamos: "0.4", build: "20261006", steamvr: "2.18.2", channel: stable, date: 2026-11-25, result: works }
