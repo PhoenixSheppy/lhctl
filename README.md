@@ -1,19 +1,26 @@
 # Lighthouse Control (`lhctl`)
 
-Turn SteamVR **Base Station 2.0**s on / standby / sleep from the **Steam Frame**, over Bluetooth LE,
-from a **Base Stations** tab in the SteamVR dashboard.
+Control SteamVR **Base Station 2.0's** directly from your **Steam Frame**, over Bluetooth LE,
+with a dedicated **Base Stations** tab in the SteamVR dashboard.
 
 ![preview](docs/preview.png)
 
-- Lists nearby stations (`LHB-*`), shows their power state, and lets you set On, Standby or Sleep for each station or for all of them.
+- Lists nearby stations (`LHB-*`), shows their power state, and lets you turn on, enter standby or put each station to sleep.
+- Allows for control of multiple base stations at once, for bulk actions.
 - **Blink** flashes a station's LED so you can tell which one is which.
-- **Wake with SteamVR**: turns the stations on when SteamVR starts.
-- **When SteamVR quits**: does nothing, or puts the stations in standby or to sleep.
+- **Wake with your headset**: turns the base stations on when your headset starts.
+- **Sleep with your headset**: puts the base stations in standby or to sleep.
 - Runs as a small background service. It waits for SteamVR and adds the tab while SteamVR runs.
+
+## Disclosure:
+
+Please note that this project was written using Claude Code, but was reviewed by a human (that's me!) and verified on actual hardware before release.
+
+AI-assisted coding really helped accelerate this project from start to finish, including debugging challenging parts and helping me better understand what I was doing while building it.
 
 ## Install (on the Frame)
 
-Desktop Mode → Konsole, one line (also how you update):
+Desktop Mode → Konsole, one line (this is also how you update):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PhoenixSheppy/lhctl/main/packaging/get.sh | bash
@@ -22,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/PhoenixSheppy/lhctl/main/packaging/
 That pulls the latest release's `lhctl.flatpak`, checks its SHA-256 and installs it.
 Add `bash -s -- --unsandboxed` instead of `bash` if needed (see Troubleshooting), or `--tag <release>` to pin one.
 
-To build from source on the Frame instead: clone the repo and run `./packaging/install.sh`.
+To build from source on the headset instead: clone the repo and run `./packaging/install.sh`.
 
 It's a background app with no window. **Lighthouse Control** in the app menu (and Discover's
 Launch button) just starts it if it isn't running and pops a notification; the UI lives in the
@@ -76,3 +83,6 @@ cmake -S . -B build -DOPENVR_LIB_DIR=/path/to/openvr/bin/linux64 && cmake --buil
 ## Licenses
 
 lhctl: MIT. OpenVR SDK (`third_party/openvr`): BSD-3-Clause. stb: MIT / public domain. Inter font: SIL OFL 1.1.
+
+## This project was made possible by:
+<img src="resources/branding/phoenixnet-labs.png" alt="PhoenixNet Labs Logo" height="20px"> **[PhoenixNet-Labs](https://phoenixnet-labs.com)**

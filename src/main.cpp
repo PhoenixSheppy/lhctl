@@ -106,6 +106,7 @@ int preview(const std::string &out) {
     lh::Ui ui;
     if (!ui.load_fonts(data_dir() + "/fonts"))
         fprintf(stderr, "fonts not found in %s/fonts\n", data_dir().c_str());
+    ui.load_logo(data_dir() + "/branding/phoenixnet-labs.png");
     lh::Model model("/dev/null");
     auto st = [](const char *name, const char *nick, const char *addr, lh::Power p, int rssi) {
         lh::Station s;
@@ -268,6 +269,8 @@ int main(int argc, char **argv) {
     const std::string fonts = data_dir() + "/fonts";
     if (!ui.load_fonts(fonts))
         fprintf(stderr, "warning: fonts not found in %s; the tab will have no text\n", fonts.c_str());
+    if (!ui.load_logo(data_dir() + "/branding/phoenixnet-labs.png"))
+        fprintf(stderr, "warning: logo not found in %s/branding\n", data_dir().c_str());
     lh::Model model(lh::default_config_path());
     model.load();
     fprintf(stderr, "lhctl %s: waiting for SteamVR (config %s)\n", LHCTL_VERSION, lh::default_config_path().c_str());

@@ -4,6 +4,7 @@
 #include "canvas.h"
 #include "model.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -11,9 +12,11 @@ namespace lh {
 
 class Ui {
 public:
-    static constexpr int W = 1024, H = 704, Thumb = 128;
+    static constexpr int W = 1024, H = 760, Thumb = 128;
 
     bool load_fonts(const std::string &dir);
+    // The "A PhoenixNet-Labs Project" badge in the bottom-right corner.
+    bool load_logo(const std::string &png);
     // Draws the whole tab. mx/my is the pointer in canvas pixels (negative = none); t is seconds, for animation.
     void render(Canvas &c, const Snapshot &s, float mx, float my, double t);
     static void render_icon(Canvas &c);
@@ -37,6 +40,7 @@ private:
     void station_card(Canvas &c, const Station &st, Rect r, float mx, float my, double t);
 
     Font regular_, bold_;
+    std::unique_ptr<Canvas> logo_;
     std::vector<Hit> hits_;
     int first_ = 0;   // first visible station row
     int count_ = 0;

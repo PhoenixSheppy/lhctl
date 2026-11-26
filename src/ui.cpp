@@ -1,7 +1,14 @@
 #include "ui.h"
 
+#include <stb_image.h>
+
 #include <algorithm>
 #include <cmath>
+
+#ifndef LHCTL_VERSION
+#define LHCTL_VERSION "dev"
+#endif
+#define LHCTL_VERSION_STR LHCTL_VERSION
 
 namespace lh {
 
@@ -18,6 +25,7 @@ constexpr Color kOn = rgb(0x4ade80), kStandby = rgb(0xfbbf24), kSleep = rgb(0x8b
 constexpr float kMargin = 32;
 constexpr float kListTop = 184, kCardH = 96, kCardGap = 10;
 constexpr int kRows = 4;
+constexpr int kLogo = 28;   // credit badge size: a touch taller than the 17 px text beside it
 
 Color with_alpha(Color c, float a) { return Color{c.r, c.g, c.b, uint8_t(std::clamp(a, 0.f, 1.f) * c.a)}; }
 
@@ -37,6 +45,41 @@ std::string dots(double t) { return std::string(size_t(std::fmod(t * 3, 4)), '.'
 
 bool Ui::load_fonts(const std::string &dir) {
     return regular_.load(dir + "/Inter-Regular.otf") & bold_.load(dir + "/Inter-SemiBold.otf");
+}
+
+bool Ui::load_logo(const std::string &png) {
+    int w = 0, h = 0, n = 0;
+    unsigned char *src = stbi_load(png.c_str(), &w, &h, &n, 4);
+    if (!src)
+        return false;
+    // Box-filter down to the badge size, weighting colour by alpha so edges don't go dark.
+    constexpr int S = kLogo;
+    logo_ = std::make_unique<Canvas>(S, S);
+    auto &dst = logo_->pixels();
+    for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++) {
+            const int x0 = x * w / S, x1 = std::max(x0 + 1, (x + 1) * w / S);
+            const int y0 = y * h / S, y1 = std::max(y0 + 1, (y + 1) * h / S);
+            double r = 0, g = 0, b = 0, a = 0;
+            int count = 0;
+            for (int yy = y0; yy < y1; yy++)
+                for (int xx = x0; xx < x1; xx++) {
+                    const unsigned char *p = &src[(size_t(yy) * w + xx) * 4];
+                    const double al = p[3] / 255.0;
+                    r += p[0] * al;
+                    g += p[1] * al;
+                    b += p[2] * al;
+                    a += al;
+                    count++;
+                }
+            uint8_t *d = &dst[(size_t(y) * S + x) * 4];
+            d[0] = a > 0 ? uint8_t(r / a) : 0;
+            d[1] = a > 0 ? uint8_t(g / a) : 0;
+            d[2] = a > 0 ? uint8_t(b / a) : 0;
+            d[3] = uint8_t(255 * a / count);
+        }
+    stbi_image_free(src);
+    return true;
 }
 
 bool Ui::animating(const Snapshot &s) {
@@ -219,6 +262,17 @@ void Ui::render(Canvas &c, const Snapshot &s, float mx, float my, double t) {
         c.text(active ? bold_ : regular_, modes[i], 18, r.x + r.w / 2, r.y, active ? kInk : kText, Align::Center,
                r.h);
         hits_.push_back({r, mode_ids[i], true});
+    }
+
+    // Credit: a thin rule, then "A PhoenixNet-Labs Project" + logo, bottom right.
+    c.rect({kMargin, fy + 64, W - 2 * kMargin, 1}, 0, with_alpha(kDim, 0.35f));
+    {
+        const float lx = W - kMargin - (logo_ ? kLogo : 0);
+        const float cy = fy + 72;   // row is 64 px tall
+        if (logo_)
+            c.blit(*logo_, int(lx), int(cy + (64 - kLogo) / 2));
+        c.text(regular_, "A PhoenixNet-Labs Project", 17, lx - (logo_ ? 10 : 0), cy, kMuted, Align::Right, 64);
+        c.text(regular_, "lhctl " LHCTL_VERSION_STR, 15, kMargin, cy, kDim, Align::Left, 64);
     }
 
     if (count_ > kRows) {
